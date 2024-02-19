@@ -1,4 +1,5 @@
-use libipld::{cid::Cid, ipld, prelude::Codec, Ipld, IpldCodec};
+use cid::Cid;
+use ipld_core::{ipld, ipld::Ipld};
 
 struct TestCase {
     name: &'static str,
@@ -84,10 +85,10 @@ fn test_compat_roundtrip() {
 
     for case in cases {
         println!("case {}", case.name);
-        let result = IpldCodec::DagPb.encode(&case.node).unwrap();
+        let result = ipld_dagpb::from_ipld(&case.node).unwrap();
         assert_eq!(result, hex::decode(case.expected_bytes).unwrap());
 
-        let ipld: Ipld = IpldCodec::DagPb.decode(&result).unwrap();
+        let ipld = ipld_dagpb::to_ipld(&result).unwrap();
         assert_eq!(ipld, case.node);
     }
 }

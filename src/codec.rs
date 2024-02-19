@@ -2,11 +2,13 @@ use core::convert::{TryFrom, TryInto};
 use std::collections::BTreeMap;
 
 use bytes::Bytes;
-use libipld_core::cid::Cid;
-use libipld_core::error::{Result, TypeError, TypeErrorType};
-use libipld_core::ipld::Ipld;
+use cid::Cid;
+//use libipld_core::error::{Result, TypeError, TypeErrorType};
+use ipld_core::ipld::Ipld;
 use quick_protobuf::sizeofs::{sizeof_len, sizeof_varint};
 use quick_protobuf::{BytesReader, MessageRead, MessageWrite, Writer, WriterBackend};
+
+use crate::Error;
 
 /// A protobuf ipld link.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -28,6 +30,7 @@ pub struct PbNode {
     pub data: Option<Bytes>,
 }
 
+/// A protobuf that references an ipld node.
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub(crate) struct PbNodeRef<'a> {
     links: Vec<PbLink>,
@@ -35,16 +38,8 @@ pub(crate) struct PbNodeRef<'a> {
 }
 
 impl PbNode {
-    pub(crate) fn links(bytes: Bytes, links: &mut impl Extend<Cid>) -> Result<()> {
-        let node = PbNode::from_bytes(bytes)?;
-        for link in node.links {
-            links.extend(Some(link.cid));
-        }
-        Ok(())
-    }
-
     /// Deserializes a `PbNode` from bytes.
-    pub fn from_bytes(buf: Bytes) -> Result<Self> {
+    pub fn from_bytes(buf: Bytes) -> Result<Self, Error> {
         let mut reader = BytesReader::from_bytes(&buf);
         let node = PbNodeRef::from_reader(&mut reader, &buf)?;
         let data = node.data.map(|d| buf.slice_ref(d));
@@ -56,7 +51,7 @@ impl PbNode {
     }
 
     /// Serializes a `PbNode` to bytes.
-    pub fn into_bytes(mut self) -> Box<[u8]> {
+    pub fn into_bytes(mut self) -> Vec<u8> {
         // Links must be strictly sorted by name before encoding, leaving stable
         // ordering where the names are the same (or absent).
         self.links.sort_by(|a, b| {
@@ -69,13 +64,13 @@ impl PbNode {
         let mut writer = Writer::new(&mut buf);
         self.write_message(&mut writer)
             .expect("protobuf to be valid");
-        buf.into_boxed_slice()
+        buf
     }
 }
 
 impl PbNodeRef<'_> {
     /// Serializes a `PbNode` to bytes.
-    pub fn into_bytes(mut self) -> Box<[u8]> {
+    pub fn into_bytes(mut self) -> Vec<u8> {
         // Links must be strictly sorted by name before encoding, leaving stable
         // ordering where the names are the same (or absent).
         self.links.sort_by(|a, b| {
@@ -88,7 +83,7 @@ impl PbNodeRef<'_> {
         let mut writer = Writer::new(&mut buf);
         self.write_message(&mut writer)
             .expect("protobuf to be valid");
-        buf.into_boxed_slice()
+        buf
     }
 }
 
@@ -124,40 +119,58 @@ impl From<PbLink> for Ipld {
 }
 
 impl<'a> TryFrom<&'a Ipld> for PbNodeRef<'a> {
-    type Error = TypeError;
+    type Error = Error;
 
     fn try_from(ipld: &'a Ipld) -> core::result::Result<Self, Self::Error> {
         let mut node = PbNodeRef::default();
 
-        match ipld.get("Links")? {
-            Ipld::List(links) => {
-                let mut prev_name = "".to_string();
-                for link in links.iter() {
-                    match link {
-                        Ipld::Map(_) => {
-                            let pb_link: PbLink = link.try_into()?;
-                            // Make sure the links are sorted correctly.
-                            if let Some(ref name) = pb_link.name {
-                                if name.as_bytes() < prev_name.as_bytes() {
-                                    // This error message isn't ideal, but the important thing is
-                                    // that it errors.
-                                    return Err(TypeError::new(TypeErrorType::Link, ipld));
+        match ipld {
+            Ipld::Map(map) => {
+                for (key, value) in map {
+                    match (key.as_str(), value) {
+                        ("Links", Ipld::List(links)) => {
+                            let mut prev_name = "".to_string();
+                            for link in links.iter() {
+                                match link {
+                                    Ipld::Map(_) => {
+                                        let pb_link: PbLink = link.try_into()?;
+                                        // Make sure the links are sorted correctly.
+                                        if let Some(ref name) = pb_link.name {
+                                            if name.as_bytes() < prev_name.as_bytes() {
+                                                // This error message isn't ideal, but the important thing is
+                                                // that it errors.
+                                                return Err(Error::LinksWrongOrder);
+                                            }
+                                            prev_name = name.clone()
+                                        }
+                                        node.links.push(pb_link)
+                                    }
+                                    other => {
+                                        return Err(Error::FromIpld(format!(
+                                            "Link entries must be an IPLD map, found: {:?}",
+                                            other
+                                        )))
+                                    }
                                 }
-                                prev_name = name.clone()
                             }
-                            node.links.push(pb_link)
                         }
-                        ipld => return Err(TypeError::new(TypeErrorType::Link, ipld)),
+                        ("Data", Ipld::Bytes(data)) => {
+                            node.data = Some(&data[..]);
+                        }
+                        (_, _) => {
+                            return Err(Error::FromIpld(
+                                "IPLD cannot be converted into DAG-PB".to_string(),
+                            ))
+                        }
                     }
                 }
             }
-            ipld => return Err(TypeError::new(TypeErrorType::List, ipld)),
-        }
-
-        match ipld.get("Data") {
-            Ok(Ipld::Bytes(data)) => node.data = Some(&data[..]),
-            Ok(ipld) => return Err(TypeError::new(TypeErrorType::Bytes, ipld)),
-            _ => (),
+            other => {
+                return Err(Error::FromIpld(format!(
+                    "Node must be an IPLD map, found: {:?}",
+                    other
+                )))
+            }
         }
 
         Ok(node)
@@ -165,7 +178,7 @@ impl<'a> TryFrom<&'a Ipld> for PbNodeRef<'a> {
 }
 
 impl TryFrom<&Ipld> for PbLink {
-    type Error = TypeError;
+    type Error = Error;
 
     fn try_from(ipld: &Ipld) -> core::result::Result<PbLink, Self::Error> {
         if let Ipld::Map(map) = ipld {
@@ -178,31 +191,41 @@ impl TryFrom<&Ipld> for PbLink {
                         cid = if let Ipld::Link(cid) = value {
                             Some(*cid)
                         } else {
-                            return Err(TypeError::new(TypeErrorType::Link, ipld));
+                            return Err(Error::FromIpld(format!(
+                                "`Hash` must be an IPLD link, found: {:?}",
+                                value
+                            )));
                         };
                     }
                     "Name" => {
                         name = if let Ipld::String(name) = value {
                             Some(name.clone())
                         } else {
-                            return Err(TypeError::new(TypeErrorType::String, ipld));
+                            return Err(Error::FromIpld(format!(
+                                "`Name` must be an IPLD string, found: {:?}",
+                                value
+                            )));
                         }
                     }
                     "Tsize" => {
                         size = if let Ipld::Integer(size) = value {
-                            Some(
-                                u64::try_from(*size)
-                                    .map_err(|_| TypeError::new(TypeErrorType::Integer, value))?,
-                            )
+                            Some(u64::try_from(*size).map_err(|_| {
+                                Error::FromIpld(
+                                    "`Tsize` must fit into a 64-bit integer".to_string(),
+                                )
+                            })?)
                         } else {
-                            return Err(TypeError::new(TypeErrorType::Integer, ipld));
+                            return Err(Error::FromIpld(format!(
+                                "`Tsize` must be an IPLD integer, found: {:?}",
+                                value
+                            )))?;
                         }
                     }
-                    _ => {
-                        return Err(TypeError::new(
-                            TypeErrorType::Key("Hash, Name or Tsize".to_string()),
-                            TypeErrorType::Key(key.to_string()),
-                        ));
+                    other => {
+                        return Err(Error::FromIpld(format!(
+                            "Only `Hash`, `Name` and `Tsize` are allowed as keys, found: `{}`",
+                            other
+                        )));
                     }
                 }
             }
@@ -210,10 +233,10 @@ impl TryFrom<&Ipld> for PbLink {
             // Name and size are optional, CID is not.
             match cid {
                 Some(cid) => Ok(PbLink { cid, name, size }),
-                None => Err(TypeError::new(TypeErrorType::Key("Hash".to_string()), ipld)),
+                None => Err(Error::FromIpld("`Hash` must be set".to_string())),
             }
         } else {
-            Err(TypeError::new(TypeErrorType::Map, ipld))
+            Err(Error::FromIpld("Links must be an IPLD map".to_string()))
         }
     }
 }
