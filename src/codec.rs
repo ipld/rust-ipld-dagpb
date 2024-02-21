@@ -126,6 +126,12 @@ impl<'a> TryFrom<&'a Ipld> for PbNodeRef<'a> {
 
         match ipld {
             Ipld::Map(map) => {
+                if map.is_empty() {
+                    return Err(Error::FromIpld(
+                        "DAG-PB must contain links or data".to_string(),
+                    ));
+                }
+
                 for (key, value) in map {
                     match (key.as_str(), value) {
                         ("Links", Ipld::List(links)) => {
