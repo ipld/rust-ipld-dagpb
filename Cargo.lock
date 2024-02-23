@@ -95,7 +95,6 @@ name = "ipld-dagpb"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "cid",
  "hex",
  "ipld-core",
  "quick-protobuf",

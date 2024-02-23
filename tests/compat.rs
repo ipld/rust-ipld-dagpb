@@ -1,5 +1,4 @@
-use cid::Cid;
-use ipld_core::{ipld, ipld::Ipld};
+use ipld_core::{cid::Cid, ipld, ipld::Ipld};
 
 struct TestCase {
     name: &'static str,

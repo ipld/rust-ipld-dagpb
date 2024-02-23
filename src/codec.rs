@@ -2,9 +2,7 @@ use core::convert::{TryFrom, TryInto};
 use std::collections::BTreeMap;
 
 use bytes::Bytes;
-use cid::Cid;
-//use libipld_core::error::{Result, TypeError, TypeErrorType};
-use ipld_core::ipld::Ipld;
+use ipld_core::{cid::Cid, ipld::Ipld};
 use quick_protobuf::sizeofs::{sizeof_len, sizeof_varint};
 use quick_protobuf::{BytesReader, MessageRead, MessageWrite, Writer, WriterBackend};
 

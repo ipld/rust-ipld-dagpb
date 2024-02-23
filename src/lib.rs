@@ -5,8 +5,7 @@ mod codec;
 mod error;
 
 use bytes::Bytes;
-use cid::Cid;
-use ipld_core::ipld::Ipld;
+use ipld_core::{cid::Cid, ipld::Ipld};
 
 use crate::{
     codec::{PbNode, PbNodeRef},
