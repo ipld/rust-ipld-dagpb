@@ -4,7 +4,7 @@ version = "0.1.1"
 authors = [
     "Volker Mische <volker.mische@gmail.com>"
 ]
-repository = "https://github.com/vmx/ipld-dagpb"
+repository = "https://github.com/ipld/rust-ipld-dagpb"
 edition = "2021"
 description = "IPLD DAG-PB codec."
 license = "MIT OR Apache-2.0"
