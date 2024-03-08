@@ -1,16 +1,20 @@
 //! Protobuf codec.
 #![deny(missing_docs)]
 
+use std::io::{BufRead, Write};
+
 mod codec;
 mod error;
 
 use bytes::Bytes;
-use ipld_core::{cid::Cid, ipld::Ipld};
-
-use crate::{
-    codec::{PbNode, PbNodeRef},
-    error::Error,
+use ipld_core::{
+    cid::Cid,
+    codec::{Codec, Links},
+    ipld::Ipld,
 };
+
+use crate::codec::PbNodeRef;
+pub use crate::{codec::PbNode, error::Error};
 
 /// Convert from [`ipld_core::ipld::Ipld`] into serialized DAG-PB.
 pub fn from_ipld(ipld: &Ipld) -> Result<Vec<u8>, Error> {
@@ -31,6 +35,51 @@ pub fn links(bytes: &[u8], links: &mut impl Extend<Cid>) -> Result<(), Error> {
         links.extend(Some(link.cid));
     }
     Ok(())
+}
+
+/// DAG-PB implementation of ipld-core's `Codec` trait.
+pub struct DagPbCodec;
+
+impl Codec<Ipld> for DagPbCodec {
+    const CODE: u64 = 0x70;
+    type Error = Error;
+
+    fn decode<R: BufRead>(mut reader: R) -> Result<Ipld, Self::Error> {
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes)?;
+        crate::to_ipld(&bytes)
+    }
+
+    fn encode<W: Write>(mut writer: W, data: &Ipld) -> Result<(), Self::Error> {
+        let bytes = crate::from_ipld(data)?;
+        Ok(writer.write_all(&bytes)?)
+    }
+}
+
+impl Links for DagPbCodec {
+    type LinksError = Error;
+
+    fn links(data: &[u8]) -> Result<impl Iterator<Item = Cid>, Self::LinksError> {
+        let mut links = Vec::new();
+        crate::links(data, &mut links)?;
+        Ok(links.into_iter())
+    }
+}
+
+impl Codec<PbNode> for DagPbCodec {
+    const CODE: u64 = 0x70;
+    type Error = Error;
+
+    fn decode<R: BufRead>(mut reader: R) -> Result<PbNode, Self::Error> {
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes)?;
+        PbNode::from_bytes(Bytes::copy_from_slice(&bytes))
+    }
+
+    fn encode<W: Write>(mut writer: W, data: &PbNode) -> Result<(), Self::Error> {
+        let bytes = data.clone().into_bytes();
+        Ok(writer.write_all(&bytes)?)
+    }
 }
 
 #[cfg(test)]
