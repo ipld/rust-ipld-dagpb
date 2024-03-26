@@ -12,7 +12,7 @@ categories = ["data-structures", "encoding"]
 
 [dependencies]
 bytes = "1.3.0"
-ipld-core = "0.3.0"
+ipld-core = "0.4.0"
 quick-protobuf = "0.8.1"
 thiserror = "1.0.25"
 
