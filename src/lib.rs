@@ -38,6 +38,7 @@ pub fn links(bytes: &[u8], links: &mut impl Extend<Cid>) -> Result<(), Error> {
 }
 
 /// DAG-PB implementation of ipld-core's `Codec` trait.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct DagPbCodec;
 
 impl Codec<Ipld> for DagPbCodec {
