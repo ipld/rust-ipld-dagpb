@@ -14,7 +14,10 @@ use ipld_core::{
 };
 
 use crate::codec::PbNodeRef;
-pub use crate::{codec::PbNode, error::Error};
+pub use crate::{
+    codec::{PbLink, PbNode},
+    error::Error,
+};
 
 /// Convert from [`ipld_core::ipld::Ipld`] into serialized DAG-PB.
 pub fn from_ipld(ipld: &Ipld) -> Result<Vec<u8>, Error> {
