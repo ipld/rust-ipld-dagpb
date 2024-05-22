@@ -145,7 +145,7 @@ impl<'a> TryFrom<&'a Ipld> for PbNodeRef<'a> {
                                                 // that it errors.
                                                 return Err(Error::LinksWrongOrder);
                                             }
-                                            prev_name = name.clone()
+                                            prev_name.clone_from(name)
                                         }
                                         node.links.push(pb_link)
                                     }
