@@ -19,6 +19,9 @@ pub use crate::{
     error::Error,
 };
 
+/// The multicodec code for DAG-PB.
+pub const DAG_PB_CODE: u64 = 0x70;
+
 /// Convert from [`ipld_core::ipld::Ipld`] into serialized DAG-PB.
 pub fn from_ipld(ipld: &Ipld) -> Result<Vec<u8>, Error> {
     let node: PbNodeRef = ipld.try_into()?;
@@ -45,7 +48,7 @@ pub fn links(bytes: &[u8], links: &mut impl Extend<Cid>) -> Result<(), Error> {
 pub struct DagPbCodec;
 
 impl Codec<Ipld> for DagPbCodec {
-    const CODE: u64 = 0x70;
+    const CODE: u64 = DAG_PB_CODE;
     type Error = Error;
 
     fn decode<R: BufRead>(mut reader: R) -> Result<Ipld, Self::Error> {
@@ -71,7 +74,7 @@ impl Links for DagPbCodec {
 }
 
 impl Codec<PbNode> for DagPbCodec {
-    const CODE: u64 = 0x70;
+    const CODE: u64 = DAG_PB_CODE;
     type Error = Error;
 
     fn decode<R: BufRead>(mut reader: R) -> Result<PbNode, Self::Error> {
