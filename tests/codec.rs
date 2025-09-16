@@ -46,6 +46,6 @@ fn test_codec_links() {
     let bytes = DagPbCodec::encode_to_vec(&ipld).unwrap();
     let links = DagPbCodec::links(&bytes).unwrap().collect::<Vec<_>>();
     let cid = Cid::try_from("bafkreie74tgmnxqwojhtumgh5dzfj46gi4mynlfr7dmm7duwzyvnpw7h7m").unwrap();
-    let expected = iter::repeat(cid).take(2).collect::<Vec<_>>();
+    let expected = iter::repeat_n(cid, 2).collect::<Vec<_>>();
     assert_eq!(links, expected);
 }
